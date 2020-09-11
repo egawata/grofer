@@ -17,11 +17,10 @@ limitations under the License.
 package general
 
 import (
+	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"strconv"
-	"sync"
 	"time"
 
 	gjson "github.com/tidwall/gjson"
@@ -89,15 +88,13 @@ func (c *CPULoad) updateCPULoad() error {
 }
 
 // GetCPULoad updated the CPULoad struct and serves the data to the data channel.
-func GetCPULoad(cpuLoad *CPULoad,
+func GetCPULoad(ctx context.Context,
+	cpuLoad *CPULoad,
 	dataChannel chan *CPULoad,
-	endChannel chan os.Signal,
-	refreshRate int32,
-	wg *sync.WaitGroup) error {
+	refreshRate int32) error {
 	for {
 		select {
-		case <-endChannel: // Stop execution if end signal received
-			wg.Done()
+		case <-ctx.Done():
 			return nil
 
 		default: // Get Memory and CPU rates per core periodically

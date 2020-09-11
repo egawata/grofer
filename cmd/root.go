@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sync"
@@ -52,15 +53,34 @@ var rootCmd = &cobra.Command{
 		if cpuLoadFlag {
 			cpuLoad := info.NewCPULoad()
 			dataChannel := make(chan *info.CPULoad, 1)
-			endChannel := make(chan os.Signal, 1)
 
+			ctx := context.Background()
+			ctx, cancel := context.WithCancel(ctx)
+
+			errCh := make(chan error, 1)
 			wg.Add(2)
 
-			go info.GetCPULoad(cpuLoad, dataChannel, endChannel, int32(4*overallRefreshRate/5), &wg)
+			go func() {
+				defer wg.Done()
+				errCh <- info.GetCPULoad(ctx, cpuLoad, dataChannel, int32(4*overallRefreshRate/5))
+				cancel()
+			}()
 
-			go overallGraph.RenderCPUinfo(endChannel, dataChannel, overallRefreshRate, &wg)
+			go func() {
+				defer wg.Done()
+				overallGraph.RenderCPUinfo(ctx, dataChannel, overallRefreshRate)
+				cancel()
+			}()
 
 			wg.Wait()
+
+			var err error
+			if err := <-errCh; err != nil {
+				fmt.Printf("Error: %v\n", err)
+			}
+
+			return err
+
 		} else {
 			endChannel := make(chan os.Signal, 1)
 			dataChannel := make(chan utils.DataStats, 1)
