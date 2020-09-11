@@ -17,6 +17,7 @@ limitations under the License.
 package general
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -212,10 +213,9 @@ func RenderCharts(endChannel chan os.Signal,
 	}
 }
 
-func RenderCPUinfo(endChannel chan os.Signal,
+func RenderCPUinfo(ctx context.Context,
 	dataChannel chan *info.CPULoad,
-	refreshRate int32,
-	wg *sync.WaitGroup) {
+	refreshRate int32) {
 
 	var on sync.Once
 
@@ -245,13 +245,12 @@ func RenderCPUinfo(endChannel chan os.Signal,
 	tick := time.Tick(time.Duration(refreshRate) * time.Millisecond)
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case e := <-uiEvents: // For keyboard events
 			switch e.ID {
 			case "q", "<C-c>": // q or Ctrl-C to quit
-				endChannel <- os.Kill
-				wg.Done()
 				return
-
 			case "<Resize>":
 				updateUI()
 
