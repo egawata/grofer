@@ -17,6 +17,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -29,6 +30,7 @@ import (
 	"github.com/pesos/grofer/src/general"
 	info "github.com/pesos/grofer/src/general"
 	"github.com/pesos/grofer/src/utils"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -36,6 +38,7 @@ const (
 )
 
 var cfgFile string
+var errCanceledByUser error = errors.New("canceled by user")
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -54,32 +57,25 @@ var rootCmd = &cobra.Command{
 			cpuLoad := info.NewCPULoad()
 			dataChannel := make(chan *info.CPULoad, 1)
 
-			ctx := context.Background()
+			eg, ctx := errgroup.WithContext(context.Background())
 			ctx, cancel := context.WithCancel(ctx)
+			defer cancel()
 
-			errCh := make(chan error, 1)
-			wg.Add(2)
+			eg.Go(func() error {
+				err := info.GetCPULoad(ctx, cpuLoad, dataChannel, int32(4*overallRefreshRate/5))
+				return err
+			})
 
-			go func() {
-				defer wg.Done()
-				errCh <- info.GetCPULoad(ctx, cpuLoad, dataChannel, int32(4*overallRefreshRate/5))
-				cancel()
-			}()
-
-			go func() {
-				defer wg.Done()
+			eg.Go(func() error {
 				overallGraph.RenderCPUinfo(ctx, dataChannel, overallRefreshRate)
-				cancel()
-			}()
+				return errCanceledByUser
+			})
 
-			wg.Wait()
-
-			var err error
-			if err := <-errCh; err != nil {
-				fmt.Printf("Error: %v\n", err)
+			if err := eg.Wait(); err != nil {
+				if err != errCanceledByUser {
+					fmt.Printf("Error: %v\n", err)
+				}
 			}
-
-			return err
 
 		} else {
 			endChannel := make(chan os.Signal, 1)
