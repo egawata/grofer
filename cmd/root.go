@@ -17,7 +17,6 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -38,7 +37,6 @@ const (
 )
 
 var cfgFile string
-var errCanceledByUser error = errors.New("canceled by user")
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -62,17 +60,15 @@ var rootCmd = &cobra.Command{
 			defer cancel()
 
 			eg.Go(func() error {
-				err := info.GetCPULoad(ctx, cpuLoad, dataChannel, int32(4*overallRefreshRate/5))
-				return err
+				return info.GetCPULoad(ctx, cpuLoad, dataChannel, int32(4*overallRefreshRate/5))
 			})
 
 			eg.Go(func() error {
-				overallGraph.RenderCPUinfo(ctx, dataChannel, overallRefreshRate)
-				return errCanceledByUser
+				return overallGraph.RenderCPUinfo(ctx, dataChannel, overallRefreshRate)
 			})
 
 			if err := eg.Wait(); err != nil {
-				if err != errCanceledByUser {
+				if err != general.ErrCanceledByUser {
 					fmt.Printf("Error: %v\n", err)
 				}
 			}

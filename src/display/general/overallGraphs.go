@@ -215,7 +215,7 @@ func RenderCharts(endChannel chan os.Signal,
 
 func RenderCPUinfo(ctx context.Context,
 	dataChannel chan *info.CPULoad,
-	refreshRate int32) {
+	refreshRate int32) error {
 
 	var on sync.Once
 
@@ -246,11 +246,11 @@ func RenderCPUinfo(ctx context.Context,
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return ctx.Err()
 		case e := <-uiEvents: // For keyboard events
 			switch e.ID {
 			case "q", "<C-c>": // q or Ctrl-C to quit
-				return
+				return info.ErrCanceledByUser
 			case "<Resize>":
 				updateUI()
 

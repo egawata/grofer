@@ -95,7 +95,7 @@ func GetCPULoad(ctx context.Context,
 	for {
 		select {
 		case <-ctx.Done():
-			return nil
+			return ctx.Err()
 
 		default: // Get Memory and CPU rates per core periodically
 			err := cpuLoad.updateCPULoad()
