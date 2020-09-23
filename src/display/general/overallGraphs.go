@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"runtime"
 	"strconv"
 	"sync"
@@ -36,10 +35,9 @@ var isCPUSet = false
 var run = true
 
 // RenderCharts handles plotting graphs and charts for system stats in general.
-func RenderCharts(endChannel chan os.Signal,
+func RenderCharts(ctx context.Context,
 	dataChannel chan utils.DataStats,
-	refreshRate int32,
-	wg *sync.WaitGroup) {
+	refreshRate int32) error {
 
 	if err := ui.Init(); err != nil {
 		log.Fatalf("failed to initialize termui: %v", err)
@@ -99,12 +97,13 @@ func RenderCharts(endChannel chan os.Signal,
 	tick := time.Tick(time.Duration(refreshRate) * time.Millisecond)
 	for {
 		select {
+		case <-ctx.Done():
+			return ctx.Err()
+
 		case e := <-uiEvents: // For keyboard events
 			switch e.ID {
 			case "q", "<C-c>": // q or Ctrl-C to quit
-				endChannel <- os.Kill
-				wg.Done()
-				return
+				return info.ErrCanceledByUser
 
 			case "<Resize>":
 				updateUI()
@@ -247,6 +246,7 @@ func RenderCPUinfo(ctx context.Context,
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+
 		case e := <-uiEvents: // For keyboard events
 			switch e.ID {
 			case "q", "<C-c>": // q or Ctrl-C to quit

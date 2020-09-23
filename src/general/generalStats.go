@@ -16,7 +16,7 @@ limitations under the License.
 package general
 
 import (
-	"os"
+	"context"
 	"sync"
 	"time"
 
@@ -24,22 +24,49 @@ import (
 )
 
 // GlobalStats gets stats about the mem and the CPUs and prints it.
-func GlobalStats(endChannel chan os.Signal,
-	dataChannel chan utils.DataStats, refreshRate int32,
-	wg *sync.WaitGroup) error {
+func GlobalStats(ctx context.Context,
+	dataChannel chan utils.DataStats,
+	refreshRate int32) error {
 
 	for {
 		select {
-		case <-endChannel: // Stop execution if end signal received
-			wg.Done()
-			return nil
+		case <-ctx.Done():
+			return ctx.Err()
 
 		default: // Get Memory and CPU rates per core periodically
+			wg := sync.WaitGroup{}
+			errCh := make(chan error, 4)
 
-			go ServeCPURates(dataChannel)
-			go ServeMemRates(dataChannel)
-			go ServeDiskRates(dataChannel)
-			ServeNetRates(dataChannel)
+			wg.Add(4)
+			go func(dc chan utils.DataStats) {
+				defer wg.Done()
+				errCh <- ServeCPURates(dc)
+			}(dataChannel)
+
+			go func(dc chan utils.DataStats) {
+				defer wg.Done()
+				errCh <- ServeMemRates(dc)
+			}(dataChannel)
+
+			go func(dc chan utils.DataStats) {
+				defer wg.Done()
+				errCh <- ServeDiskRates(dc)
+			}(dataChannel)
+
+			go func(dc chan utils.DataStats) {
+				defer wg.Done()
+				errCh <- ServeNetRates(dc)
+			}(dataChannel)
+
+			wg.Wait()
+			close(errCh)
+
+			for err := range errCh {
+				if err != nil {
+					return err
+				}
+			}
+
 			time.Sleep(time.Duration(refreshRate) * time.Millisecond)
 		}
 	}

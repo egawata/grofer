@@ -19,7 +19,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sync"
 
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
@@ -48,8 +47,6 @@ var rootCmd = &cobra.Command{
 			return fmt.Errorf("invalid refresh rate: minimum refresh rate is 1000(ms)")
 		}
 
-		var wg sync.WaitGroup
-
 		cpuLoadFlag, _ := cmd.Flags().GetBool("cpuinfo")
 		if cpuLoadFlag {
 			cpuLoad := info.NewCPULoad()
@@ -74,15 +71,22 @@ var rootCmd = &cobra.Command{
 			}
 
 		} else {
-			endChannel := make(chan os.Signal, 1)
+			eg, ctx := errgroup.WithContext(context.Background())
+
 			dataChannel := make(chan utils.DataStats, 1)
 
-			wg.Add(2)
+			eg.Go(func() error {
+				return general.GlobalStats(ctx, dataChannel, int32(4*overallRefreshRate/5))
+			})
+			eg.Go(func() error {
+				return overallGraph.RenderCharts(ctx, dataChannel, overallRefreshRate)
+			})
 
-			go general.GlobalStats(endChannel, dataChannel, int32(4*overallRefreshRate/5), &wg)
-			go overallGraph.RenderCharts(endChannel, dataChannel, overallRefreshRate, &wg)
-
-			wg.Wait()
+			if err := eg.Wait(); err != nil {
+				if err != general.ErrCanceledByUser {
+					fmt.Printf("Error: %v\n", err)
+				}
+			}
 		}
 
 		return nil
