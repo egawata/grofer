@@ -53,8 +53,6 @@ var rootCmd = &cobra.Command{
 			dataChannel := make(chan *info.CPULoad, 1)
 
 			eg, ctx := errgroup.WithContext(context.Background())
-			ctx, cancel := context.WithCancel(ctx)
-			defer cancel()
 
 			eg.Go(func() error {
 				return info.GetCPULoad(ctx, cpuLoad, dataChannel, int32(4*overallRefreshRate/5))

@@ -23,10 +23,19 @@ import (
 	"github.com/pesos/grofer/src/utils"
 )
 
+type serveFunc func(chan utils.DataStats) error
+
 // GlobalStats gets stats about the mem and the CPUs and prints it.
 func GlobalStats(ctx context.Context,
 	dataChannel chan utils.DataStats,
 	refreshRate int32) error {
+
+	serveFuncs := []serveFunc{
+		ServeCPURates,
+		ServeMemRates,
+		ServeDiskRates,
+		ServeNetRates,
+	}
 
 	for {
 		select {
@@ -34,29 +43,17 @@ func GlobalStats(ctx context.Context,
 			return ctx.Err()
 
 		default: // Get Memory and CPU rates per core periodically
-			wg := sync.WaitGroup{}
-			errCh := make(chan error, 4)
+			var wg sync.WaitGroup
 
-			wg.Add(4)
-			go func(dc chan utils.DataStats) {
-				defer wg.Done()
-				errCh <- ServeCPURates(dc)
-			}(dataChannel)
+			errCh := make(chan error, len(serveFuncs))
 
-			go func(dc chan utils.DataStats) {
-				defer wg.Done()
-				errCh <- ServeMemRates(dc)
-			}(dataChannel)
-
-			go func(dc chan utils.DataStats) {
-				defer wg.Done()
-				errCh <- ServeDiskRates(dc)
-			}(dataChannel)
-
-			go func(dc chan utils.DataStats) {
-				defer wg.Done()
-				errCh <- ServeNetRates(dc)
-			}(dataChannel)
+			for _, sf := range serveFuncs {
+				wg.Add(1)
+				go func(sf serveFunc, dc chan utils.DataStats) {
+					defer wg.Done()
+					errCh <- sf(dc)
+				}(sf, dataChannel)
+			}
 
 			wg.Wait()
 			close(errCh)
