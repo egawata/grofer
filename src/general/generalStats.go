@@ -26,13 +26,13 @@ import (
 // GlobalStats gets stats about the mem and the CPUs and prints it.
 func GlobalStats(endChannel chan os.Signal,
 	dataChannel chan utils.DataStats, refreshRate int32,
-	wg *sync.WaitGroup) {
+	wg *sync.WaitGroup) error {
 
 	for {
 		select {
 		case <-endChannel: // Stop execution if end signal received
 			wg.Done()
-			return
+			return nil
 
 		default: // Get Memory and CPU rates per core periodically
 
